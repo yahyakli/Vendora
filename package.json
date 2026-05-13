@@ -1,0 +1,10 @@
+{
+  "name": "vendora",
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "turbo": "latest"
+  }
+}

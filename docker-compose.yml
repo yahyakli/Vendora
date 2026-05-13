@@ -1,0 +1,221 @@
+services:
+  # --- Infrastructure ---
+  postgres:
+    image: postgres:16-alpine
+    container_name: vendora-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-vendora}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - vendora_net
+
+  mysql:
+    image: mysql:8.0
+    container_name: vendora-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+      MYSQL_USER: ${MYSQL_USER:-vendora}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-pass}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - vendora_net
+
+  mongodb:
+    image: mongo:7
+    container_name: vendora-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-vendora}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASS:-pass}
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - vendora_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: vendora-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --requirepass ${REDIS_PASSWORD:-redispass}
+    networks:
+      - vendora_net
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: vendora-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-vendora}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-pass}
+    networks:
+      - vendora_net
+
+  minio:
+    image: minio/minio:latest
+    container_name: vendora-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-vendora_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-your-minio-secret}
+    volumes:
+      - minio_data:/data
+    networks:
+      - vendora_net
+
+  # --- API Gateway ---
+  nginx:
+    image: nginx:alpine
+    container_name: vendora-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./infra/nginx/nginx.dev.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - auth
+      - product
+      - order
+      - chat
+      - storage
+      - analytics
+    networks:
+      - vendora_net
+
+  # --- Microservices (Placeholders) ---
+  auth:
+    build: ./services/auth
+    container_name: vendora-auth
+    ports:
+      - "8081:8081"
+    env_file: .env
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - vendora_net
+
+  product:
+    build: ./services/product
+    container_name: vendora-product
+    ports:
+      - "8082:8082"
+    env_file: .env
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - vendora_net
+
+  order:
+    build: ./services/order
+    container_name: vendora-order
+    ports:
+      - "8083:8083"
+    env_file: .env
+    depends_on:
+      - mysql
+      - rabbitmq
+    networks:
+      - vendora_net
+
+  chat:
+    build: ./services/chat
+    container_name: vendora-chat
+    ports:
+      - "8084:8084"
+    env_file: .env
+    depends_on:
+      - mongodb
+      - rabbitmq
+    networks:
+      - vendora_net
+
+  ai_ranking:
+    build: ./services/ranking
+    container_name: vendora-ai-ranking
+    ports:
+      - "8085:8085"
+    env_file: .env
+    depends_on:
+      - redis
+    networks:
+      - vendora_net
+
+  notification:
+    build: ./services/notification
+    container_name: vendora-notification
+    ports:
+      - "8086:8086"
+    env_file: .env
+    depends_on:
+      - rabbitmq
+    networks:
+      - vendora_net
+
+  storage:
+    build: ./services/storage
+    container_name: vendora-storage
+    ports:
+      - "8087:8087"
+    env_file: .env
+    depends_on:
+      - minio
+    networks:
+      - vendora_net
+
+  analytics:
+    build: ./services/analytics
+    container_name: vendora-analytics
+    ports:
+      - "8088:8088"
+    env_file: .env
+    depends_on:
+      - mysql
+      - rabbitmq
+    networks:
+      - vendora_net
+
+  # --- Apps ---
+  web:
+    build: ./apps/web
+    container_name: vendora-web
+    ports:
+      - "3000:3000"
+    env_file: .env
+    networks:
+      - vendora_net
+
+  admin:
+    build: ./apps/admin
+    container_name: vendora-admin
+    ports:
+      - "3001:3000"
+    env_file: .env
+    networks:
+      - vendora_net
+
+networks:
+  vendora_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  postgres_data:
+  mysql_data:
+  mongo_data:
+  minio_data:

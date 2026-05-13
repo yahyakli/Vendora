@@ -1,0 +1,73 @@
+# ======================
+# Virtual Environment
+# ======================
+venv/
+env/
+.venv/
+
+# ======================
+# Python Cache
+# ======================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ======================
+# Environment Variables
+# ======================
+.env
+.env.*
+
+# ======================
+# IDE / Editor
+# ======================
+.vscode/
+.idea/
+
+# ======================
+# OS Files
+# ======================
+.DS_Store
+Thumbs.db
+
+# ======================
+# Logs
+# ======================
+*.log
+logs/
+
+# ======================
+# Testing
+# ======================
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ======================
+# Type checkers
+# ======================
+.mypy_cache/
+.pyre/
+
+# ======================
+# Build / Packaging
+# ======================
+build/
+dist/
+*.egg-info/
+
+# ======================
+# Jupyter Notebook
+# ======================
+.ipynb_checkpoints/
+
+# ======================
+# Database files (optional)
+# ======================
+*.sqlite3
+*.db
+
+# ======================
+# Docker (optional local files)
+# ======================
+*.pid

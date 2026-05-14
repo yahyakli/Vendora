@@ -4,11 +4,11 @@ server:
 spring:
   application:
     name: auth-service
-  
+
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${AUTH_DB:vendora_auth}
     username: ${POSTGRES_USER:vendora}
-    password: ${POSTGRES_PASSWORD:pass}
+    password: ${POSTGRES_PASSWORD:yahya}
     driver-class-name: org.postgresql.Driver
 
   jpa:

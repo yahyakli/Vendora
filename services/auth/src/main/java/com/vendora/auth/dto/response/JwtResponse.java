@@ -11,6 +11,7 @@ import java.util.List;
 @Builder
 public class JwtResponse {
     private String token;
+    @Builder.Default
     private String type = "Bearer";
     private String refreshToken;
     private Long id;

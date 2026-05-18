@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 public class UserController {
     private final UserRepository userRepository;
     private final PasswordEncoder encoder;
+    private final com.vendora.auth.service.MailService mailService;
 
     @GetMapping("/me")
     public ResponseEntity<?> getCurrentUser() {
@@ -46,6 +47,9 @@ public class UserController {
 
         user.setPassword(encoder.encode(newPassword));
         userRepository.save(user);
+        
+        mailService.sendPasswordChangedEmail(user.getEmail(), user.getName());
+        
         return ResponseEntity.ok("Password changed successfully");
     }
 }

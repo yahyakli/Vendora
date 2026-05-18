@@ -5,28 +5,35 @@ import com.vendora.auth.dto.request.RegisterRequest;
 import com.vendora.auth.dto.request.TokenRefreshRequest;
 import com.vendora.auth.dto.response.JwtResponse;
 import com.vendora.auth.entity.PasswordResetToken;
+import com.vendora.auth.entity.VerificationToken;
 import com.vendora.auth.entity.RefreshToken;
 import com.vendora.auth.entity.Role;
 import com.vendora.auth.entity.User;
 import com.vendora.auth.repository.PasswordResetTokenRepository;
+import com.vendora.auth.repository.VerificationTokenRepository;
 import com.vendora.auth.repository.RoleRepository;
 import com.vendora.auth.repository.UserRepository;
 import com.vendora.auth.security.UserDetailsImpl;
 import com.vendora.auth.security.jwt.JwtUtils;
 import com.vendora.auth.service.MailService;
 import com.vendora.auth.service.RefreshTokenService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @RestController
@@ -41,33 +48,44 @@ public class AuthController {
     private final RefreshTokenService refreshTokenService;
     private final MailService mailService;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
+    private final VerificationTokenRepository verificationTokenRepository;
+    private final StringRedisTemplate redisTemplate;
 
     @PostMapping("/login")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword()));
+        try {
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword()));
 
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-        String jwt = jwtUtils.generateJwtToken(authentication, loginRequest.isRememberMe());
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+            String jwt = jwtUtils.generateJwtToken(authentication, loginRequest.isRememberMe());
 
-        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-        List<String> roles = userDetails.getAuthorities().stream()
-                .map(item -> item.getAuthority())
-                .collect(Collectors.toList());
+            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+            List<String> roles = userDetails.getAuthorities().stream()
+                    .map(item -> item.getAuthority())
+                    .collect(Collectors.toList());
 
-        RefreshToken refreshToken = refreshTokenService.createRefreshToken(userDetails.getId());
+            RefreshToken refreshToken = refreshTokenService.createRefreshToken(userDetails.getId());
 
-        return ResponseEntity.ok(JwtResponse.builder()
-                .token(jwt)
-                .refreshToken(refreshToken.getToken())
-                .id(userDetails.getId())
-                .name(userDetails.getName())
-                .email(userDetails.getEmail())
-                .roles(roles)
-                .build());
+            return ResponseEntity.ok(JwtResponse.builder()
+                    .token(jwt)
+                    .refreshToken(refreshToken.getToken())
+                    .id(userDetails.getId())
+                    .name(userDetails.getName())
+                    .email(userDetails.getEmail())
+                    .roles(roles)
+                    .build());
+        } catch (org.springframework.security.authentication.DisabledException e) {
+            return ResponseEntity.status(401).body("Error: Email not verified. Please check your email.");
+        } catch (org.springframework.security.authentication.LockedException e) {
+            return ResponseEntity.status(401).body("Error: Your account has been banned.");
+        } catch (org.springframework.security.core.AuthenticationException e) {
+            return ResponseEntity.status(401).body("Error: Invalid email or password.");
+        }
     }
 
     @PostMapping("/register")
+    @Transactional
     public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterRequest signUpRequest) {
         if (userRepository.existsByEmail(signUpRequest.getEmail())) {
             return ResponseEntity.badRequest().body("Error: Email is already in use!");
@@ -77,6 +95,7 @@ public class AuthController {
                 .name(signUpRequest.getName())
                 .email(signUpRequest.getEmail())
                 .password(encoder.encode(signUpRequest.getPassword()))
+                .enabled(false) // User is disabled until email verification
                 .build();
 
         Set<Role> roles = new HashSet<>();
@@ -87,7 +106,41 @@ public class AuthController {
         user.setRoles(roles);
         userRepository.save(user);
 
-        return ResponseEntity.ok("User registered successfully!");
+        // Generate verification token
+        String code = String.format("%06d", new Random().nextInt(999999));
+        VerificationToken verificationToken = VerificationToken.builder()
+                .user(user)
+                .token(code)
+                .expiryDate(Instant.now().plusSeconds(900)) // 15 minutes
+                .build();
+        
+        verificationTokenRepository.save(verificationToken);
+        
+        mailService.sendVerificationEmail(user.getEmail(), user.getName(), code);
+
+        return ResponseEntity.ok("User registered successfully! Please check your email to verify your account.");
+    }
+
+    @PostMapping("/verify-email")
+    @Transactional
+    public ResponseEntity<?> verifyEmail(@RequestParam String token) {
+        VerificationToken verificationToken = verificationTokenRepository.findByToken(token)
+                .orElseThrow(() -> new RuntimeException("Invalid verification token"));
+
+        if (verificationToken.getExpiryDate().isBefore(Instant.now())) {
+            verificationTokenRepository.delete(verificationToken);
+            throw new RuntimeException("Verification token expired");
+        }
+
+        User user = verificationToken.getUser();
+        user.setEnabled(true);
+        userRepository.save(user);
+        
+        verificationTokenRepository.delete(verificationToken);
+        
+        mailService.sendWelcomeEmail(user.getEmail(), user.getName());
+        
+        return ResponseEntity.ok("Email verified successfully! You can now log in.");
     }
 
     @PostMapping("/refresh")
@@ -105,7 +158,24 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<?> logoutUser() {
+    public ResponseEntity<?> logoutUser(HttpServletRequest request) {
+        String headerAuth = request.getHeader("Authorization");
+        if (StringUtils.hasText(headerAuth) && headerAuth.startsWith("Bearer ")) {
+            String jwt = headerAuth.substring(7);
+            
+            // Add to Redis blacklist
+            try {
+                Date expirationDate = jwtUtils.getExpirationDateFromJwtToken(jwt);
+                long ttl = expirationDate.getTime() - System.currentTimeMillis();
+                
+                if (ttl > 0) {
+                    redisTemplate.opsForValue().set("blacklist:" + jwt, "1", ttl, TimeUnit.MILLISECONDS);
+                }
+            } catch (Exception e) {
+                // Token might be malformed or already expired
+            }
+        }
+
         UserDetailsImpl userDetails = (UserDetailsImpl) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Long userId = userDetails.getId();
         refreshTokenService.deleteByUserId(userId);
@@ -127,6 +197,7 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
+    @Transactional
     public ResponseEntity<?> forgotPassword(@RequestParam String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found with email: " + email));
@@ -143,13 +214,13 @@ public class AuthController {
         
         passwordResetTokenRepository.save(resetToken);
         
-        mailService.sendEmail(user.getEmail(), "Vendora - Password Reset Code", 
-                "Your password reset code is: " + code + "\nValid for 10 minutes.");
+        mailService.sendPasswordResetEmail(user.getEmail(), user.getName(), code);
         
         return ResponseEntity.ok("Reset code sent to your email.");
     }
 
     @PostMapping("/reset-password")
+    @Transactional
     public ResponseEntity<?> resetPassword(@RequestParam String token, @RequestParam String newPassword) {
         PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(token)
                 .orElseThrow(() -> new RuntimeException("Invalid reset token"));
@@ -164,6 +235,8 @@ public class AuthController {
         userRepository.save(user);
         
         passwordResetTokenRepository.delete(resetToken);
+        
+        mailService.sendPasswordChangedEmail(user.getEmail(), user.getName());
         
         return ResponseEntity.ok("Password reset successfully.");
     }

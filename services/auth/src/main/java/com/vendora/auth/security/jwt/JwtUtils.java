@@ -72,4 +72,9 @@ public class JwtUtils {
 
         return false;
     }
+
+    public Date getExpirationDateFromJwtToken(String token) {
+        return Jwts.parser().verifyWith(key()).build()
+                .parseSignedClaims(token).getPayload().getExpiration();
+    }
 }

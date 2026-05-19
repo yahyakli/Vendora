@@ -56,11 +56,13 @@ public class AuthController {
     private final OAuthAccountRepository oAuthAccountRepository;
 
     @GetMapping("/oauth/google")
+    @PreAuthorize("permitAll()")
     public void redirectToGoogle(jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
         response.sendRedirect(oAuthService.getGoogleAuthUrl());
     }
 
     @GetMapping("/oauth/google/callback")
+    @PreAuthorize("permitAll()")
     @Transactional
     public ResponseEntity<?> googleCallback(@RequestParam String code) {
         try {
@@ -124,11 +126,13 @@ public class AuthController {
     }
 
     @GetMapping("/oauth/github")
+    @PreAuthorize("permitAll()")
     public void redirectToGitHub(jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
         response.sendRedirect(oAuthService.getGitHubAuthUrl());
     }
 
     @GetMapping("/oauth/github/callback")
+    @PreAuthorize("permitAll()")
     @Transactional
     public ResponseEntity<?> githubCallback(@RequestParam String code) {
         try {
@@ -196,6 +200,7 @@ public class AuthController {
         }
     }
     @PostMapping("/login")
+    @PreAuthorize("permitAll()")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
         try {
             Authentication authentication = authenticationManager.authenticate(
@@ -229,6 +234,7 @@ public class AuthController {
     }
 
     @PostMapping("/register")
+    @PreAuthorize("permitAll()")
     @Transactional
     public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterRequest signUpRequest) {
         if (userRepository.existsByEmail(signUpRequest.getEmail())) {
@@ -266,6 +272,7 @@ public class AuthController {
     }
 
     @PostMapping("/verify-email")
+    @PreAuthorize("permitAll()")
     @Transactional
     public ResponseEntity<?> verifyEmail(@RequestParam String token) {
         VerificationToken verificationToken = verificationTokenRepository.findByToken(token)
@@ -288,6 +295,7 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
+    @PreAuthorize("permitAll()")
     public ResponseEntity<?> refreshtoken(@Valid @RequestBody TokenRefreshRequest request) {
         String requestRefreshToken = request.getRefreshToken();
 
@@ -302,6 +310,7 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<?> logoutUser(HttpServletRequest request) {
         String headerAuth = request.getHeader("Authorization");
         if (StringUtils.hasText(headerAuth) && headerAuth.startsWith("Bearer ")) {
@@ -327,6 +336,7 @@ public class AuthController {
     }
 
     @GetMapping("/validate")
+    @PreAuthorize("permitAll()")
     public ResponseEntity<?> validateToken(@RequestParam String token) {
         if (jwtUtils.validateJwtToken(token)) {
             String username = jwtUtils.getUserNameFromJwtToken(token);
@@ -341,6 +351,7 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
+    @PreAuthorize("permitAll()")
     @Transactional
     public ResponseEntity<?> forgotPassword(@RequestParam String email) {
         User user = userRepository.findByEmail(email)
@@ -364,6 +375,7 @@ public class AuthController {
     }
 
     @PostMapping("/reset-password")
+    @PreAuthorize("permitAll()")
     @Transactional
     public ResponseEntity<?> resetPassword(@RequestParam String token, @RequestParam String newPassword) {
         PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(token)

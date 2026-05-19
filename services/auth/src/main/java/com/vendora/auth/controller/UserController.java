@@ -37,6 +37,7 @@ public class UserController {
     // --- User Profile Endpoints ---
 
     @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<?> getCurrentUser() {
         UserDetailsImpl userDetails = (UserDetailsImpl) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         User user = userRepository.findById(userDetails.getId()).orElseThrow();
@@ -44,6 +45,7 @@ public class UserController {
     }
 
     @PutMapping("/me")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<?> updateProfile(@RequestBody User userUpdate) {
         UserDetailsImpl userDetails = (UserDetailsImpl) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         User user = userRepository.findById(userDetails.getId()).orElseThrow();
@@ -56,6 +58,7 @@ public class UserController {
     }
 
     @PutMapping("/me/password")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<?> changePassword(@RequestParam String oldPassword, @RequestParam String newPassword) {
         UserDetailsImpl userDetails = (UserDetailsImpl) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         User user = userRepository.findById(userDetails.getId()).orElseThrow();

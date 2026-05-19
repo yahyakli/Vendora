@@ -24,6 +24,11 @@ paths:
             type: string
             enum: [products, avatars, digital, invoices]
             default: products
+        - name: product_id
+          in: query
+          required: false
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -71,6 +76,12 @@ paths:
             type: string
             enum: [products, avatars, digital, invoices]
             default: products
+        - name: expires
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 3600
       responses:
         '200':
           description: URL generated

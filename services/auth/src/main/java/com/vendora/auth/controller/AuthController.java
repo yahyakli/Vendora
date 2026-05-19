@@ -122,6 +122,79 @@ public class AuthController {
             return ResponseEntity.status(500).body("Error: Google OAuth failed - " + e.getMessage());
         }
     }
+
+    @GetMapping("/oauth/github")
+    public void redirectToGitHub(jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
+        response.sendRedirect(oAuthService.getGitHubAuthUrl());
+    }
+
+    @GetMapping("/oauth/github/callback")
+    @Transactional
+    public ResponseEntity<?> githubCallback(@RequestParam String code) {
+        try {
+            // 1. Exchange code for access token
+            Map<String, Object> tokenResponse = oAuthService.getGitHubAccessToken(code);
+            String accessToken = (String) tokenResponse.get("access_token");
+
+            // 2. Fetch user profile
+            Map<String, Object> profile = oAuthService.getGitHubUserProfile(accessToken);
+            String email = (String) profile.get("email");
+            String name = (String) profile.get("name");
+            if (name == null) name = (String) profile.get("login"); // GitHub 'login' as fallback
+            String providerId = String.valueOf(profile.get("id"));
+            String avatarUrl = (String) profile.get("avatar_url");
+
+            if (email == null) {
+                return ResponseEntity.status(400).body("Error: Could not retrieve email from GitHub. Please make sure your primary email is verified and public, or try another method.");
+            }
+
+            // 3. Find or create user
+            User user = userRepository.findByEmail(email).orElseGet(() -> {
+                User newUser = User.builder()
+                        .name(name)
+                        .email(email)
+                        .password(encoder.encode(UUID.randomUUID().toString()))
+                        .enabled(true)
+                        .avatarUrl(avatarUrl)
+                        .build();
+
+                Role buyerRole = roleRepository.findByName(Role.ERole.BUYER)
+                        .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
+                newUser.getRoles().add(buyerRole);
+                return userRepository.save(newUser);
+            });
+
+            // 4. Ensure OAuth Account exists
+            oAuthAccountRepository.findByProviderAndProviderId("github", providerId)
+                    .orElseGet(() -> {
+                        OAuthAccount account = OAuthAccount.builder()
+                                .user(user)
+                                .provider("github")
+                                .providerId(providerId)
+                                .build();
+                        return oAuthAccountRepository.save(account);
+                    });
+
+            // 5. Generate JWT
+            String jwt = jwtUtils.generateTokenFromUsername(user.getEmail());
+            RefreshToken refreshToken = refreshTokenService.createRefreshToken(user.getId());
+
+            List<String> roles = user.getRoles().stream()
+                    .map(role -> role.getName().name())
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(JwtResponse.builder()
+                    .token(jwt)
+                    .refreshToken(refreshToken.getToken())
+                    .id(user.getId())
+                    .name(user.getName())
+                    .email(user.getEmail())
+                    .roles(roles)
+                    .build());
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Error: GitHub OAuth failed - " + e.getMessage());
+        }
+    }
     @PostMapping("/login")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
         try {

@@ -46,3 +46,8 @@ vendora:
     access-token-expiration: ${JWT_EXPIRY_SHORT}
     refresh-token-expiration: ${JWT_EXPIRY_LONG}
     remember-me-expiration: ${JWT_EXPIRY_LONG}
+  oauth:
+    google:
+      client-id: ${GOOGLE_CLIENT_ID}
+      client-secret: ${GOOGLE_CLIENT_SECRET}
+      redirect-uri: ${GOOGLE_REDIRECT_URI}

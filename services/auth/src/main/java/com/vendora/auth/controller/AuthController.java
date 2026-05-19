@@ -13,9 +13,11 @@ import com.vendora.auth.repository.PasswordResetTokenRepository;
 import com.vendora.auth.repository.VerificationTokenRepository;
 import com.vendora.auth.repository.RoleRepository;
 import com.vendora.auth.repository.UserRepository;
+import com.vendora.auth.repository.OAuthAccountRepository;
 import com.vendora.auth.security.UserDetailsImpl;
 import com.vendora.auth.security.jwt.JwtUtils;
 import com.vendora.auth.service.MailService;
+import com.vendora.auth.service.OAuthService;
 import com.vendora.auth.service.RefreshTokenService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -50,7 +52,76 @@ public class AuthController {
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final VerificationTokenRepository verificationTokenRepository;
     private final StringRedisTemplate redisTemplate;
+    private final OAuthService oAuthService;
+    private final OAuthAccountRepository oAuthAccountRepository;
 
+    @GetMapping("/oauth/google")
+    public void redirectToGoogle(jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
+        response.sendRedirect(oAuthService.getGoogleAuthUrl());
+    }
+
+    @GetMapping("/oauth/google/callback")
+    @Transactional
+    public ResponseEntity<?> googleCallback(@RequestParam String code) {
+        try {
+            // 1. Exchange code for access token
+            Map<String, Object> tokenResponse = oAuthService.getGoogleAccessToken(code);
+            String accessToken = (String) tokenResponse.get("access_token");
+
+            // 2. Fetch user profile
+            Map<String, Object> profile = oAuthService.getGoogleUserProfile(accessToken);
+            String email = (String) profile.get("email");
+            String name = (String) profile.get("name");
+            String providerId = (String) profile.get("sub");
+            String picture = (String) profile.get("picture");
+
+            // 3. Find or create user
+            User user = userRepository.findByEmail(email).orElseGet(() -> {
+                User newUser = User.builder()
+                        .name(name)
+                        .email(email)
+                        .password(encoder.encode(UUID.randomUUID().toString()))
+                        .enabled(true)
+                        .avatarUrl(picture)
+                        .build();
+
+                Role buyerRole = roleRepository.findByName(Role.ERole.BUYER)
+                        .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
+                newUser.getRoles().add(buyerRole);
+                return userRepository.save(newUser);
+            });
+
+            // 4. Ensure OAuth Account exists
+            oAuthAccountRepository.findByProviderAndProviderId("google", providerId)
+                    .orElseGet(() -> {
+                        OAuthAccount account = OAuthAccount.builder()
+                                .user(user)
+                                .provider("google")
+                                .providerId(providerId)
+                                .build();
+                        return oAuthAccountRepository.save(account);
+                    });
+
+            // 5. Generate JWT
+            String jwt = jwtUtils.generateTokenFromUsername(user.getEmail());
+            RefreshToken refreshToken = refreshTokenService.createRefreshToken(user.getId());
+
+            List<String> roles = user.getRoles().stream()
+                    .map(role -> role.getName().name())
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(JwtResponse.builder()
+                    .token(jwt)
+                    .refreshToken(refreshToken.getToken())
+                    .id(user.getId())
+                    .name(user.getName())
+                    .email(user.getEmail())
+                    .roles(roles)
+                    .build());
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Error: Google OAuth failed - " + e.getMessage());
+        }
+    }
     @PostMapping("/login")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
         try {

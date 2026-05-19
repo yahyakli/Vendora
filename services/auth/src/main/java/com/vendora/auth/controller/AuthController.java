@@ -4,11 +4,7 @@ import com.vendora.auth.dto.request.LoginRequest;
 import com.vendora.auth.dto.request.RegisterRequest;
 import com.vendora.auth.dto.request.TokenRefreshRequest;
 import com.vendora.auth.dto.response.JwtResponse;
-import com.vendora.auth.entity.PasswordResetToken;
-import com.vendora.auth.entity.VerificationToken;
-import com.vendora.auth.entity.RefreshToken;
-import com.vendora.auth.entity.Role;
-import com.vendora.auth.entity.User;
+import com.vendora.auth.entity.*;
 import com.vendora.auth.repository.PasswordResetTokenRepository;
 import com.vendora.auth.repository.VerificationTokenRepository;
 import com.vendora.auth.repository.RoleRepository;
@@ -24,6 +20,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -153,9 +150,10 @@ public class AuthController {
             }
 
             // 3. Find or create user
+            String finalName = name;
             User user = userRepository.findByEmail(email).orElseGet(() -> {
                 User newUser = User.builder()
-                        .name(name)
+                        .name(finalName)
                         .email(email)
                         .password(encoder.encode(UUID.randomUUID().toString()))
                         .enabled(true)

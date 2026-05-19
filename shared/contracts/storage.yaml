@@ -1,11 +1,142 @@
 openapi: 3.0.0
 info:
-  title: Storage Service API
+  title: Vendora Storage Service API
   version: 1.0.0
+  description: API for internal S3-compatible storage management
+
+servers:
+  - url: /api/storage
+    description: Nginx Gateway route
+
 paths:
   /storage/upload:
     post:
-      summary: Upload file
+      summary: Upload a file
+      tags:
+        - storage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: bucket_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [products, avatars, digital, invoices]
+            default: products
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
       responses:
         '200':
-          description: OK
+          description: Upload successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  file_key:
+                    type: string
+                  bucket:
+                    type: string
+        '401':
+          description: Unauthorized
+        '400':
+          description: Invalid bucket type
+
+  /storage/url/{file_key}:
+    get:
+      summary: Get pre-signed download URL
+      tags:
+        - storage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: file_key
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: bucket_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [products, avatars, digital, invoices]
+            default: products
+      responses:
+        '200':
+          description: URL generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+
+  /storage/{file_key}:
+    delete:
+      summary: Delete a file
+      tags:
+        - storage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: file_key
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: bucket_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [products, avatars, digital, invoices]
+            default: products
+      responses:
+        '200':
+          description: File deleted successfully
+
+  /storage/quota/{vendor_id}:
+    get:
+      summary: Get storage quota and usage for a vendor
+      tags:
+        - storage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: vendor_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Quota info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vendor_id:
+                    type: string
+                  usage_bytes:
+                    type: integer
+                  limit_bytes:
+                    type: integer
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

@@ -1,0 +1,20 @@
+services:
+  product-postgres:
+    container_name: vendora-product-postgres
+    image: 'postgres:16-alpine'
+    environment:
+      - 'POSTGRES_DB=${DB_DATABASE:-vendora_product}'
+      - 'POSTGRES_PASSWORD=${DB_PASSWORD:-pass}'
+      - 'POSTGRES_USER=${DB_USERNAME:-vendora}'
+    ports:
+      - '${DB_PORT:-5433}:5432'
+    volumes:
+      - product_postgres_data:/var/lib/postgresql/data
+  product-redis:
+    container_name: vendora-product-redis
+    image: 'redis:7-alpine'
+    ports:
+      - '${REDIS_PORT:-6380}:6379'
+
+volumes:
+  product_postgres_data:

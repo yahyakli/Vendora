@@ -35,4 +35,8 @@ return [
         'url' => env('AUTH_SERVICE_URL', 'http://localhost:8081'),
     ],
 
+    'storage' => [
+        'url' => env('STORAGE_SERVICE_URL', 'http://localhost:8087'),
+    ],
+
 ];

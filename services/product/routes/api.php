@@ -30,8 +30,16 @@ Route::middleware('service.auth')->get('/test-auth', function (Request $request)
 Route::get('/products', [\App\Http\Controllers\ProductController::class, 'index']);
 Route::get('/products/{id}', [\App\Http\Controllers\ProductController::class, 'show']);
 
+// Category Routes
+Route::get('/categories', [\App\Http\Controllers\CategoryController::class, 'index']);
+
 Route::middleware('service.auth')->group(function () {
+    Route::post('/categories', [\App\Http\Controllers\CategoryController::class, 'store']);
+    Route::put('/categories/{id}', [\App\Http\Controllers\CategoryController::class, 'update']);
+    Route::delete('/categories/{id}', [\App\Http\Controllers\CategoryController::class, 'destroy']);
+    
     Route::post('/products', [\App\Http\Controllers\ProductController::class, 'store']);
     Route::put('/products/{id}', [\App\Http\Controllers\ProductController::class, 'update']);
     Route::delete('/products/{id}', [\App\Http\Controllers\ProductController::class, 'destroy']);
+    Route::post('/products/{id}/images', [\App\Http\Controllers\ProductController::class, 'uploadImage']);
 });

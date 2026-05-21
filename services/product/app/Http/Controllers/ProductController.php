@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use App\Models\ProductImage;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Validator;
 
 class ProductController extends Controller
@@ -134,5 +136,80 @@ class ProductController extends Controller
         $product->delete();
 
         return response()->json(['message' => 'Product deleted successfully']);
+    }
+
+    /**
+     * Upload an image for a product.
+     */
+    public function uploadImage(Request $request, $id)
+    {
+        $product = Product::find($id);
+
+        if (!$product) {
+            return response()->json(['message' => 'Product not found'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:5120', // 5MB max
+            'is_primary' => 'nullable|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $file = $request->file('image');
+        $token = $request->bearerToken();
+
+        try {
+            // 1. Upload to Storage Service
+            $uploadUrl = config('services.storage.url') . '/storage/upload';
+            
+            $uploadResponse = Http::withToken($token)
+                ->attach('file', file_get_contents($file->path()), $file->getClientOriginalName())
+                ->post($uploadUrl, [
+                    'bucket_type' => 'products',
+                    'product_id' => $id,
+                ]);
+
+            if ($uploadResponse->failed()) {
+                return response()->json([
+                    'message' => 'Failed to upload image to storage service',
+                    'error' => $uploadResponse->json('message', 'Unknown error')
+                ], 502);
+            }
+
+            $fileKey = $uploadResponse->json('file_key');
+
+            // 2. Get Signed/Public URL
+            $urlResponse = Http::withToken($token)
+                ->get(config('services.storage.url') . '/storage/url/' . $fileKey, [
+                    'bucket_type' => 'products'
+                ]);
+
+            if ($urlResponse->failed()) {
+                return response()->json(['message' => 'Failed to get image URL'], 502);
+            }
+
+            $imageUrl = $urlResponse->json('url');
+
+            // 3. Save to database
+            $productImage = ProductImage::create([
+                'product_id' => $id,
+                'image_url' => $imageUrl,
+                'is_primary' => $request->input('is_primary', false),
+            ]);
+
+            return response()->json([
+                'message' => 'Image uploaded successfully',
+                'image' => $productImage
+            ], 201);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Error communicating with storage service',
+                'error' => $e->getMessage()
+            ], 503);
+        }
     }
 }

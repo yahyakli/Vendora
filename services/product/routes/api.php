@@ -25,3 +25,13 @@ Route::middleware('service.auth')->get('/test-auth', function (Request $request)
         'role' => $request->attributes->get('user_role'),
     ]);
 });
+
+// Product Routes
+Route::get('/products', [\App\Http\Controllers\ProductController::class, 'index']);
+Route::get('/products/{id}', [\App\Http\Controllers\ProductController::class, 'show']);
+
+Route::middleware('service.auth')->group(function () {
+    Route::post('/products', [\App\Http\Controllers\ProductController::class, 'store']);
+    Route::put('/products/{id}', [\App\Http\Controllers\ProductController::class, 'update']);
+    Route::delete('/products/{id}', [\App\Http\Controllers\ProductController::class, 'destroy']);
+});

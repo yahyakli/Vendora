@@ -17,3 +17,11 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
+
+Route::middleware('service.auth')->get('/test-auth', function (Request $request) {
+    return response()->json([
+        'message' => 'Successfully authenticated via Microservice Auth',
+        'user_id' => $request->attributes->get('user_id'),
+        'role' => $request->attributes->get('user_role'),
+    ]);
+});

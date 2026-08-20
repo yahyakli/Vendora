@@ -25,8 +25,25 @@ class Vendor extends Model
         'verified_at',
     ];
 
+    protected $casts = [
+        'rating' => 'float',
+        'reviews_count' => 'integer',
+        'commission_rate' => 'float',
+        'verified_at' => 'datetime',
+    ];
+
     public function products()
     {
         return $this->hasMany(Product::class);
+    }
+
+    public function applications()
+    {
+        return $this->hasMany(VendorApplication::class, 'user_id', 'user_id');
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->where('status', 'active');
     }
 }

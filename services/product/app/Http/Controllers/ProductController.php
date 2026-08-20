@@ -212,4 +212,160 @@ class ProductController extends Controller
             ], 503);
         }
     }
+
+    /**
+     * Full-text product search with advanced multi-parameter filters.
+     */
+    public function search(Request $request)
+    {
+        $query = Product::with(['category', 'vendor', 'images'])
+            ->where('status', 'active');
+
+        // Text query matching name or description
+        if ($request->has('q') && !empty($request->q)) {
+            $searchTerm = '%' . $request->q . '%';
+            $query->where(function ($q) use ($searchTerm) {
+                $q->where('name', 'ILIKE', $searchTerm)
+                  ->orWhere('description', 'ILIKE', $searchTerm)
+                  ->orWhere('short_description', 'ILIKE', $searchTerm)
+                  ->orWhere('sku', 'ILIKE', $searchTerm);
+            });
+        }
+
+        // Filters
+        if ($request->has('category_id')) {
+            $query->where('category_id', $request->category_id);
+        }
+
+        if ($request->has('vendor_id')) {
+            $query->where('vendor_id', $request->vendor_id);
+        }
+
+        if ($request->has('type')) {
+            $query->where('type', $request->type);
+        }
+
+        if ($request->has('min_price')) {
+            $query->where('price', '>=', (float)$request->min_price);
+        }
+
+        if ($request->has('max_price')) {
+            $query->where('price', '<=', (float)$request->max_price);
+        }
+
+        if ($request->has('rating')) {
+            $query->where('avg_rating', '>=', (float)$request->rating);
+        }
+
+        // Sorting
+        $sortBy = $request->input('sort_by', 'relevance');
+        if ($sortBy === 'price_asc') {
+            $query->orderBy('price', 'asc');
+        } elseif ($sortBy === 'price_desc') {
+            $query->orderBy('price', 'desc');
+        } elseif ($sortBy === 'rating') {
+            $query->orderBy('avg_rating', 'desc');
+        } elseif ($sortBy === 'newest') {
+            $query->orderBy('created_at', 'desc');
+        } else {
+            $query->orderBy('id', 'desc');
+        }
+
+        $results = $query->paginate($request->input('per_page', 20));
+
+        return response()->json($results);
+    }
+
+    /**
+     * Public storefront product listing for a specific vendor.
+     */
+    public function byVendor(Request $request, $vendorId)
+    {
+        $vendor = \App\Models\Vendor::find($vendorId);
+        if (!$vendor) {
+            return response()->json(['message' => 'Vendor not found'], 404);
+        }
+
+        $products = Product::where('vendor_id', $vendorId)
+            ->where('status', 'active')
+            ->with(['images', 'category'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($request->input('per_page', 15));
+
+        return response()->json([
+            'vendor' => $vendor,
+            'products' => $products
+        ]);
+    }
+
+    /**
+     * Product feed endpoint (stub - integrates with AI ranking service in Sprint 9).
+     */
+    public function feed(Request $request)
+    {
+        $products = Product::where('status', 'active')
+            ->with(['images', 'category', 'vendor'])
+            ->orderBy('avg_rating', 'desc')
+            ->orderBy('created_at', 'desc')
+            ->paginate($request->input('per_page', 20));
+
+        return response()->json($products);
+    }
+
+    /**
+     * Admin product listing across all statuses (Admin only).
+     */
+    public function adminAll(Request $request)
+    {
+        $query = Product::with(['category', 'vendor', 'images']);
+
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->has('search')) {
+            $search = '%' . $request->search . '%';
+            $query->where('name', 'ILIKE', $search);
+        }
+
+        $products = $query->orderBy('created_at', 'desc')->paginate($request->input('per_page', 20));
+
+        return response()->json($products);
+    }
+
+    /**
+     * Flag a product for content violation (Admin only).
+     */
+    public function flag(Request $request, $id)
+    {
+        $product = Product::find($id);
+        if (!$product) {
+            return response()->json(['message' => 'Product not found'], 404);
+        }
+
+        $product->update(['status' => 'flagged']);
+
+        return response()->json([
+            'message' => 'Product flagged for review',
+            'product' => $product
+        ]);
+    }
+
+    /**
+     * Approve a flagged or pending product (Admin only).
+     */
+    public function approve(Request $request, $id)
+    {
+        $product = Product::find($id);
+        if (!$product) {
+            return response()->json(['message' => 'Product not found'], 404);
+        }
+
+        $product->update(['status' => 'active']);
+
+        return response()->json([
+            'message' => 'Product approved and active',
+            'product' => $product
+        ]);
+    }
 }

@@ -36,7 +36,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping({"/api/auth", "/auth"})
 @RequiredArgsConstructor
 public class AuthController {
     private final AuthenticationManager authenticationManager;
@@ -335,17 +335,40 @@ public class AuthController {
 
     @GetMapping("/validate")
     @PreAuthorize("permitAll()")
-    public ResponseEntity<?> validateToken(@RequestParam String token) {
-        if (jwtUtils.validateJwtToken(token)) {
-            String username = jwtUtils.getUserNameFromJwtToken(token);
-            User user = userRepository.findByEmail(username).orElseThrow();
-            return ResponseEntity.ok(Map.of(
-                "valid", true,
-                "userId", user.getId(),
-                "role", user.getRoles().stream().map(r -> r.getName().name()).collect(Collectors.toList())
-            ));
+    public ResponseEntity<?> validateToken(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @RequestParam(value = "token", required = false) String tokenParam) {
+        
+        String jwt = null;
+        if (StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ")) {
+            jwt = authHeader.substring(7);
+        } else if (StringUtils.hasText(tokenParam)) {
+            jwt = tokenParam;
         }
-        return ResponseEntity.status(401).body(Map.of("valid", false));
+
+        if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
+            String username = jwtUtils.getUserNameFromJwtToken(jwt);
+            Optional<User> userOpt = userRepository.findByEmail(username);
+            if (userOpt.isPresent()) {
+                User user = userOpt.get();
+                List<String> roleList = user.getRoles().stream()
+                        .map(r -> r.getName().name())
+                        .collect(Collectors.toList());
+                String primaryRole = roleList.isEmpty() ? "BUYER" : roleList.get(0);
+
+                Map<String, Object> response = new HashMap<>();
+                response.put("valid", true);
+                response.put("user_id", user.getId());
+                response.put("userId", user.getId());
+                response.put("email", user.getEmail());
+                response.put("name", user.getName());
+                response.put("role", primaryRole);
+                response.put("roles", roleList);
+
+                return ResponseEntity.ok(response);
+            }
+        }
+        return ResponseEntity.status(401).body(Map.of("valid", false, "message", "Invalid or expired token"));
     }
 
     @PostMapping("/forgot-password")

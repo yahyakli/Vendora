@@ -1,11 +1,146 @@
 openapi: 3.0.0
 info:
-  title: Analytics Service API
+  title: Vendora Analytics & Fraud Detection Service API
   version: 1.0.0
+  description: Platform metric aggregation, nightly revenue reports, trending statistics, and fraud detection signal service
+
+servers:
+  - url: /api/analytics
+    description: Nginx Gateway API Route
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    DailyRevenue:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        total_revenue: { type: number, format: float }
+        total_orders: { type: integer }
+        commission_revenue: { type: number, format: float }
+
+    TopVendor:
+      type: object
+      properties:
+        vendor_id: { type: integer }
+        store_name: { type: string }
+        total_sales_amount: { type: number, format: float }
+        total_orders: { type: integer }
+
+    TrendingProduct:
+      type: object
+      properties:
+        product_id: { type: integer }
+        product_name: { type: string }
+        views_count: { type: integer }
+        purchases_count: { type: integer }
+
+    FraudSignal:
+      type: object
+      properties:
+        id: { type: integer }
+        user_id: { type: integer }
+        signal_type:
+          type: string
+          enum: [velocity_spike, multi_account_ip, high_chargeback_rate]
+        confidence: { type: number, format: float }
+        details: { type: string }
+        detected_at: { type: string, format: date-time }
+
+    PlatformSummary:
+      type: object
+      properties:
+        gmv: { type: number, format: float }
+        active_vendors_count: { type: integer }
+        active_buyers_count: { type: integer }
+        open_disputes_count: { type: integer }
+        total_orders_today: { type: integer }
+        total_revenue_today: { type: number, format: float }
+
 paths:
-  /analytics/revenue:
+  /revenue:
     get:
-      summary: Revenue report
+      summary: Retrieve historical revenue and daily sales aggregation (Admin)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: start_date
+          in: query
+          schema: { type: string, format: date }
+        - name: end_date
+          in: query
+          schema: { type: string, format: date }
       responses:
         '200':
-          description: OK
+          description: Daily revenue list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DailyRevenue' }
+
+  /vendors/top:
+    get:
+      summary: Retrieve top-performing vendors ranked by sales volume (Admin)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        '200':
+          description: Top vendors
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/TopVendor' }
+
+  /products/trending:
+    get:
+      summary: Retrieve trending products based on view and purchase interactions (Admin/Buyer)
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        '200':
+          description: Trending products list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/TrendingProduct' }
+
+  /fraud/signals:
+    get:
+      summary: List high-risk fraud signals and velocity anomalies (Admin)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: min_confidence
+          in: query
+          schema: { type: number, default: 0.7 }
+      responses:
+        '200':
+          description: Fraud anomaly signals
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/FraudSignal' }
+
+  /platform/summary:
+    get:
+      summary: Get platform KPI overview metrics for Admin Dashboard summary cards (Admin)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Key platform KPIs
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlatformSummary' }
+

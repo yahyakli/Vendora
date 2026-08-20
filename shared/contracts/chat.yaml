@@ -1,11 +1,119 @@
 openapi: 3.0.0
 info:
-  title: Chat Service API
+  title: Vendora Chat & Realtime Messaging Service API
   version: 1.0.0
+  description: Real-time buyer-seller messaging, conversation threads, and offline notification routing service
+
+servers:
+  - url: /api/chat
+    description: Nginx Gateway API Route
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Message:
+      type: object
+      properties:
+        id: { type: string }
+        conversation_id: { type: string }
+        sender_id: { type: integer }
+        recipient_id: { type: integer }
+        content: { type: string }
+        read: { type: boolean }
+        read_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    Conversation:
+      type: object
+      properties:
+        id: { type: string }
+        participants:
+          type: array
+          items: { type: integer }
+        last_message: { type: string, nullable: true }
+        last_message_at: { type: string, format: date-time, nullable: true }
+        unread_count: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
 paths:
-  /chat/conversations:
+  /conversations/{userId}:
     get:
-      summary: List conversations
+      summary: Get all conversations for a user
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: integer }
       responses:
         '200':
-          description: OK
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Conversation' }
+
+  /conversations:
+    post:
+      summary: Start a new conversation between buyer and vendor
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                recipient_id: { type: integer }
+                initial_message: { type: string }
+      responses:
+        '201':
+          description: Conversation created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Conversation' }
+
+  /messages/{conversationId}:
+    get:
+      summary: Get message history for a conversation
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: before
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Message thread history
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Message' }
+
+  /search:
+    get:
+      summary: Search message content across conversations
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Search results
+

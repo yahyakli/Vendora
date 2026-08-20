@@ -1,11 +1,366 @@
 openapi: 3.0.0
 info:
-  title: Order Service API
+  title: Vendora Order & Payment Service API
   version: 1.0.0
+  description: Order lifecycle, cart management, Stripe checkout, disputes, refunds, and vendor payouts service
+
+servers:
+  - url: /api
+    description: Nginx Gateway API Route
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    CartItem:
+      type: object
+      properties:
+        id: { type: integer }
+        product_id: { type: integer }
+        quantity: { type: integer }
+        unit_price: { type: number, format: float }
+
+    Cart:
+      type: object
+      properties:
+        id: { type: integer }
+        user_id: { type: integer }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CartItem' }
+        subtotal: { type: number, format: float }
+        total: { type: number, format: float }
+
+    OrderItem:
+      type: object
+      properties:
+        id: { type: integer }
+        order_id: { type: integer }
+        product_id: { type: integer }
+        vendor_id: { type: integer }
+        product_name: { type: string }
+        unit_price: { type: number, format: float }
+        quantity: { type: integer }
+        total_price: { type: number, format: float }
+        product_type: { type: string, enum: [physical, digital] }
+        digital_license_key: { type: string, nullable: true }
+
+    Order:
+      type: object
+      properties:
+        id: { type: integer }
+        user_id: { type: integer }
+        status:
+          type: string
+          enum: [PENDING, PAID, PROCESSING, SHIPPED, DELIVERED, CANCELLED, REVIEWED]
+        subtotal: { type: number, format: float }
+        shipping_fee: { type: number, format: float }
+        tax: { type: number, format: float }
+        total_amount: { type: number, format: float }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/OrderItem' }
+        client_secret: { type: string, description: Stripe PaymentIntent client secret }
+
+    Dispute:
+      type: object
+      properties:
+        id: { type: integer }
+        order_id: { type: integer }
+        user_id: { type: integer }
+        reason: { type: string }
+        status: { type: string, enum: [OPEN, UNDER_REVIEW, RESOLVED_REFUNDED, RESOLVED_DENIED] }
+
+    Refund:
+      type: object
+      properties:
+        id: { type: integer }
+        order_id: { type: integer }
+        amount: { type: number, format: float }
+        reason: { type: string }
+
+    Payout:
+      type: object
+      properties:
+        id: { type: integer }
+        vendor_id: { type: integer }
+        amount: { type: number, format: float }
+        status: { type: string, enum: [PENDING, PROCESSING, PAID, FAILED] }
+
 paths:
+  # --- Cart ---
+  /cart:
+    get:
+      summary: Get user shopping cart
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Active cart
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cart' }
+    delete:
+      summary: Clear entire cart
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Cart cleared
+
+  /cart/items:
+    post:
+      summary: Add item to cart
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                product_id: { type: integer }
+                quantity: { type: integer }
+      responses:
+        '200':
+          description: Item added
+
+  /cart/items/{itemId}:
+    put:
+      summary: Update cart item quantity
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quantity: { type: integer }
+      responses:
+        '200':
+          description: Quantity updated
+    delete:
+      summary: Remove item from cart
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Item removed
+
+  # --- Orders & Checkout ---
   /orders:
     post:
-      summary: Create order
+      summary: Create order from cart and generate Stripe PaymentIntent
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                shipping_address:
+                  type: object
+                  properties:
+                    street: { type: string }
+                    city: { type: string }
+                    zip_code: { type: string }
+                    country: { type: string }
       responses:
         '201':
-          description: Created
+          description: Order created, client_secret returned for Stripe payment
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+    get:
+      summary: Get user order history
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: List of user orders
+
+  /orders/{id}:
+    get:
+      summary: Get order details by ID
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Order detail
+
+  /orders/{id}/status:
+    put:
+      summary: Update order status (Seller/Admin)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [PROCESSING, SHIPPED, DELIVERED]
+      responses:
+        '200':
+          description: Status updated
+
+  /orders/{id}/cancel:
+    post:
+      summary: Cancel order
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Order cancelled
+
+  /orders/vendor/{vendorId}:
+    get:
+      summary: Get orders received by vendor (Seller)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: vendorId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Vendor orders
+
+  /orders/webhook/stripe:
+    post:
+      summary: Stripe webhook handler (confirm payment, transition to PAID, publish order.placed event)
+      responses:
+        '200':
+          description: Webhook received and processed
+
+  # --- Disputes & Refunds ---
+  /orders/{id}/dispute:
+    post:
+      summary: File dispute on order (Buyer)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        '201':
+          description: Dispute opened
+    get:
+      summary: Get dispute details
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Dispute details
+
+  /orders/{id}/dispute/resolve:
+    put:
+      summary: Resolve dispute (Admin)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action: { type: string, enum: [REFUND, REJECT] }
+                notes: { type: string }
+      responses:
+        '200':
+          description: Dispute resolved
+
+  /orders/{id}/refund:
+    post:
+      summary: Process order refund via Stripe (Admin/Seller)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount: { type: number }
+                reason: { type: string }
+      responses:
+        '200':
+          description: Refund processed and event published
+
+  # --- Payouts ---
+  /payouts/vendor/{vendorId}:
+    get:
+      summary: Get payout history for vendor
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: vendorId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Payout history
+
+  /payouts/{vendorId}/process:
+    post:
+      summary: Trigger vendor payout processing (Admin)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: vendorId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Payout triggered
+

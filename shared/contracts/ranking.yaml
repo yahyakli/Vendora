@@ -1,11 +1,113 @@
 openapi: 3.0.0
 info:
-  title: AI Ranking Service API
+  title: Vendora AI Ranking & Recommendations Service API
   version: 1.0.0
+  description: Machine Learning ranking service using LightGBM LambdaRank and Redis user-feature vectors (Internal Service)
+
+components:
+  schemas:
+    RankRequest:
+      type: object
+      required:
+        - user_id
+        - product_ids
+      properties:
+        user_id:
+          type: integer
+          description: Unique identifier of the user browsing the catalog
+        product_ids:
+          type: array
+          items:
+            type: integer
+          description: Candidate product IDs to score and rank
+
+    RankedProduct:
+      type: object
+      properties:
+        product_id:
+          type: integer
+        score:
+          type: number
+          format: float
+
+    RankResponse:
+      type: object
+      properties:
+        user_id:
+          type: integer
+        ranked_products:
+          type: array
+          items:
+            $ref: '#/components/schemas/RankedProduct'
+        model_version:
+          type: string
+
+    ModelStats:
+      type: object
+      properties:
+        model_name:
+          type: string
+        model_version:
+          type: string
+        last_trained:
+          type: string
+          format: date-time
+        num_features:
+          type: integer
+        ndcg_score:
+          type: number
+          format: float
+
 paths:
   /rank:
     post:
-      summary: Rank products
+      summary: Score and rank candidate product IDs for a given user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RankRequest'
       responses:
         '200':
-          description: OK
+          description: Ranked product IDs with scores
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RankResponse'
+        '400':
+          description: Invalid candidate list or user ID
+
+  /retrain:
+    post:
+      summary: Trigger LightGBM model retraining on synthetic or aggregated event data (Admin)
+      responses:
+        '200':
+          description: Retraining completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  model_version: { type: string }
+                  training_duration_seconds: { type: number }
+
+  /model/stats:
+    get:
+      summary: Retrieve current model metadata, version, and performance metrics
+      responses:
+        '200':
+          description: Model performance statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelStats'
+
+  /health:
+    get:
+      summary: Health check endpoint
+      responses:
+        '200':
+          description: Service is healthy
+

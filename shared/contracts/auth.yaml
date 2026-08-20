@@ -85,7 +85,50 @@ components:
           type: string
           format: date-time
 
+    TokenValidationResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        user_id:
+          type: integer
+        userId:
+          type: integer
+        email:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [BUYER, SELLER, ADMIN]
+        roles:
+          type: array
+          items:
+            type: string
+
 paths:
+  # --- Internal Inter-Service Validation ---
+  /auth/validate:
+    get:
+      tags: [Auth]
+      summary: Validate JWT token internally for inter-service communication
+      parameters:
+        - name: token
+          in: query
+          required: false
+          schema: { type: string }
+          description: Token query parameter (optional if Authorization header is supplied)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Token is valid
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenValidationResponse' }
+        '401':
+          description: Invalid or expired token
+
   # --- Authentication ---
   /auth/login:
     post:

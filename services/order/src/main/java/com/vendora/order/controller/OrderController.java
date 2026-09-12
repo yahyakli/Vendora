@@ -46,13 +46,45 @@ public class OrderController {
     }
 
     /**
-     * POST /api/orders/checkout - Convert cart to order and create Stripe PaymentIntent
+     * POST /api/orders - Convert cart to order and create Stripe PaymentIntent
+     */
+    @PostMapping
+    public ResponseEntity<Order> createOrder(
+            @AuthenticationPrincipal UserPrincipal user,
+            @RequestBody CreateOrderRequest request) {
+        return ResponseEntity.ok(orderService.checkout(user.getId(), request));
+    }
+
+    /**
+     * POST /api/orders/checkout - Backward compatible alias for existing clients
      */
     @PostMapping("/checkout")
     public ResponseEntity<Order> checkout(
             @AuthenticationPrincipal UserPrincipal user,
             @RequestBody CreateOrderRequest request) {
         return ResponseEntity.ok(orderService.checkout(user.getId(), request));
+    }
+
+    /**
+     * GET /api/orders/vendor/{vendorId} - Get orders for a vendor
+     */
+    @GetMapping("/vendor/{vendorId}")
+    public ResponseEntity<Page<Order>> getVendorOrders(
+            @PathVariable Long vendorId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return ResponseEntity.ok(orderService.getVendorOrders(vendorId, pageable));
+    }
+
+    /**
+     * POST /api/orders/{id}/cancel - Cancel an order before shipping
+     */
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<Order> cancelOrder(
+            @AuthenticationPrincipal UserPrincipal user,
+            @PathVariable Long id) {
+        return ResponseEntity.ok(orderService.cancelOrder(id, user.getId()));
     }
 
     /**

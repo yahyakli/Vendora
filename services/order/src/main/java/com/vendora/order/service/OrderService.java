@@ -39,6 +39,11 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
+    public Page<Order> getVendorOrders(Long vendorId, Pageable pageable) {
+        return orderRepository.findByVendorId(vendorId, pageable);
+    }
+
+    @Transactional(readOnly = true)
     public Order getOrder(Long orderId, Long userId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
@@ -122,6 +127,28 @@ public class OrderService {
         cartRepository.save(cart);
 
         return savedOrder;
+    }
+
+    @Transactional
+    public Order cancelOrder(Long orderId, Long userId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+
+        if (!order.getUserId().equals(userId)) {
+            throw new RuntimeException("Access denied");
+        }
+
+        if (order.getStatus() == Order.OrderStatus.SHIPPED || order.getStatus() == Order.OrderStatus.DELIVERED) {
+            throw new RuntimeException("Order cannot be cancelled after it has shipped");
+        }
+
+        if (order.getStatus() == Order.OrderStatus.CANCELLED) {
+            return order;
+        }
+
+        order.setStatus(Order.OrderStatus.CANCELLED);
+        order.setPaymentStatus(Order.PaymentStatus.REFUNDED);
+        return orderRepository.save(order);
     }
 
     @Transactional

@@ -204,6 +204,32 @@ paths:
         '200':
           description: Order detail
 
+  /orders/vendor/{vendorId}:
+    get:
+      summary: Get orders received by vendor (Seller)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: vendorId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Vendor orders
+
+  /orders/{id}/cancel:
+    post:
+      summary: Cancel order
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Order cancelled
+
   /orders/{id}/status:
     put:
       summary: Update order status (Seller/Admin)

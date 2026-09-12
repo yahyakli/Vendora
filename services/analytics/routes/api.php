@@ -14,6 +14,11 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
+Route::prefix('analytics')->group(function () {
+    Route::get('/revenue', [\App\Http\Controllers\AnalyticsController::class, 'revenue']);
+    Route::get('/vendors/top', [\App\Http\Controllers\AnalyticsController::class, 'topVendors']);
+    Route::get('/products/trending', [\App\Http\Controllers\AnalyticsController::class, 'trendingProducts']);
+    Route::get('/categories/trending', [\App\Http\Controllers\AnalyticsController::class, 'trendingCategories']);
+    Route::get('/fraud/signals', [\App\Http\Controllers\AnalyticsController::class, 'fraudSignals']);
+    Route::get('/platform/summary', [\App\Http\Controllers\AnalyticsController::class, 'platformSummary']);
 });

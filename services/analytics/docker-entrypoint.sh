@@ -18,6 +18,8 @@ php artisan serve --host=0.0.0.0 --port=8088 &
 http_pid=$!
 php artisan analytics:consume-events &
 consumer_pid=$!
+php artisan schedule:work &
+scheduler_pid=$!
 
-trap 'kill "$http_pid" "$consumer_pid" 2>/dev/null || true' TERM INT
-wait "$http_pid" "$consumer_pid"
+trap 'kill "$http_pid" "$consumer_pid" "$scheduler_pid" 2>/dev/null || true' TERM INT
+wait "$http_pid" "$consumer_pid" "$scheduler_pid"

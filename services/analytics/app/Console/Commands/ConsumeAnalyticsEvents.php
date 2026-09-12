@@ -144,12 +144,14 @@ class ConsumeAnalyticsEvents extends Command
 
         $day = $this->eventDay($payload);
         $vendorId = $this->integerValue($payload, ['vendor_id', 'vendorId']);
+        $categoryId = $this->integerValue($payload, ['category_id', 'categoryId']);
         $view = DB::table('product_views')->where('product_id', $productId)->where('day', $day)->first();
 
         DB::table('product_views')->updateOrInsert(
             ['product_id' => $productId, 'day' => $day],
             [
                 'vendor_id' => $vendorId ?: $view?->vendor_id,
+                'category_id' => $categoryId ?: $view?->category_id,
                 'view_count' => ($view?->view_count ?? 0) + 1,
                 'updated_at' => now(),
                 'created_at' => $view?->created_at ?? now(),

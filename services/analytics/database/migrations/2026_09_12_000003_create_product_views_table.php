@@ -12,6 +12,7 @@ return new class extends Migration
             $table->id();
             $table->unsignedBigInteger('product_id');
             $table->unsignedBigInteger('vendor_id')->nullable();
+            $table->unsignedBigInteger('category_id')->nullable();
             $table->date('day');
             $table->unsignedInteger('view_count')->default(0);
             $table->timestamps();

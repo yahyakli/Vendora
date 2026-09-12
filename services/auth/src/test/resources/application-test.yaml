@@ -1,0 +1,35 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:auth_test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  mail:
+    host: localhost
+    port: 2525
+    username: test
+    password: test
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:
+
+vendora:
+  jwt:
+    secret: test-secret-key-that-is-at-least-32-characters-long
+    access-token-expiration: 3600000
+    refresh-token-expiration: 86400000
+    remember-me-expiration: 604800000
+  oauth:
+    google:
+      client-id: test-google-client
+      client-secret: test-google-secret
+      redirect-uri: http://localhost/test/google
+    github:
+      client-id: test-github-client
+      client-secret: test-github-secret
+      redirect-uri: http://localhost/test/github

@@ -195,6 +195,16 @@ services:
     ports:
       - "8086:8086"
     env_file: .env
+    environment:
+      PORT: 8086
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-vendora}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-pass}
+      RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-vendora.events}
+      RABBITMQ_NOTIFICATION_QUEUE: ${RABBITMQ_NOTIFICATION_QUEUE:-vendora.notifications}
+      NOTIFICATION_MAX_RETRIES: ${NOTIFICATION_MAX_RETRIES:-3}
+      NOTIFICATION_RETRY_BASE_DELAY_MS: ${NOTIFICATION_RETRY_BASE_DELAY_MS:-1000}
     depends_on:
       - rabbitmq
     networks:

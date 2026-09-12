@@ -129,14 +129,17 @@ const setupRabbitMq = async () => {
     for (const routingKey of eventKeys) {
         await rabbitChannel.bindQueue(queueName, exchangeName, routingKey);
     }
-    for (let retry = 1; retry <= maxRetries; retry += 1) {
-        await rabbitChannel.assertQueue(`${queueName}.retry.${retry}`, {
-            durable: true,
-            arguments: {
-                'x-message-ttl': retryBaseDelayMs * (2 ** (retry - 1)),
-                'x-dead-letter-exchange': exchangeName,
-            },
-        });
+    for (const routingKey of eventKeys) {
+        for (let retry = 1; retry <= maxRetries; retry += 1) {
+            await rabbitChannel.assertQueue(`${queueName}.retry.${routingKey}.${retry}`, {
+                durable: true,
+                arguments: {
+                    'x-message-ttl': retryBaseDelayMs * (2 ** (retry - 1)),
+                    'x-dead-letter-exchange': exchangeName,
+                    'x-dead-letter-routing-key': routingKey,
+                },
+            });
+        }
     }
 
     await rabbitChannel.consume(queueName, async (message) => {
@@ -149,7 +152,7 @@ const setupRabbitMq = async () => {
             console.log(`Processed notification event ${routingKey}`);
         } catch (error) {
             if (retry < maxRetries) {
-                rabbitChannel.sendToQueue(`${queueName}.retry.${retry + 1}`, message.content, {
+                rabbitChannel.sendToQueue(`${queueName}.retry.${routingKey}.${retry + 1}`, message.content, {
                     persistent: true,
                     contentType: message.properties.contentType || 'application/json',
                     headers: { 'x-retry-count': retry + 1 },

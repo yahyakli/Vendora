@@ -25,7 +25,7 @@ def load_interactions(path: Path, seed: int) -> pd.DataFrame:
     return interactions
 
 
-def train_model(interactions: pd.DataFrame, output: Path, seed: int) -> None:
+def train_model(interactions: pd.DataFrame, output: Path, seed: int) -> dict[str, int]:
     features = build_training_features(interactions)
     labels = interactions["event_weight"].astype(int)
     groups = interactions.groupby("user_id", sort=False).size().to_list()
@@ -46,6 +46,7 @@ def train_model(interactions: pd.DataFrame, output: Path, seed: int) -> None:
     model.booster_.save_model(str(output))
     print(f"Saved LambdaRank model to {output}")
     print(f"Training rows: {len(features)}; user groups: {len(groups)}")
+    return {"training_rows": len(features), "user_groups": len(groups)}
 
 
 def main() -> None:

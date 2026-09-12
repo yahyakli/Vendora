@@ -1,18 +1,22 @@
 import json
 import os
+import secrets
 from pathlib import Path
 
 import pandas as pd
 import redis
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from lightgbm import Booster
 from app.features import build_online_features
 from app.schemas import RankRequest, RankResponse
+from scripts.train import load_interactions, train_model
 
 app = FastAPI(title="Vendora AI Ranking Service", version="1.0.0")
 BASE_DIR = Path(__file__).resolve().parents[1]
 MODEL_PATH = Path(os.getenv("MODEL_PATH", BASE_DIR / "models" / "model.lgb"))
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+DATA_PATH = Path(os.getenv("DATA_PATH", BASE_DIR / "data" / "interactions.csv"))
+RETRAIN_ADMIN_TOKEN = os.getenv("RANKING_ADMIN_TOKEN")
 _model: Booster | None = None
 _redis_client = None
 
@@ -56,6 +60,37 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "ok", "model_ready": MODEL_PATH.exists()}
+
+
+@app.get("/model/stats")
+def model_stats():
+    if not MODEL_PATH.exists():
+        return {"model_ready": False, "model_path": str(MODEL_PATH)}
+
+    model = get_model()
+    return {
+        "model_ready": True,
+        "model_path": str(MODEL_PATH),
+        "model_size_bytes": MODEL_PATH.stat().st_size,
+        "last_modified": MODEL_PATH.stat().st_mtime,
+        "num_iterations": model.current_iteration(),
+        "num_features": model.num_feature(),
+        "feature_names": model.feature_name(),
+    }
+
+
+@app.post("/retrain")
+def retrain(x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")):
+    if not RETRAIN_ADMIN_TOKEN:
+        raise HTTPException(status_code=503, detail="Retraining admin token is not configured")
+    if not x_admin_token or not secrets.compare_digest(x_admin_token, RETRAIN_ADMIN_TOKEN):
+        raise HTTPException(status_code=403, detail="Admin authorization required")
+
+    global _model
+    interactions = load_interactions(DATA_PATH, seed=42)
+    training_stats = train_model(interactions, MODEL_PATH, seed=42)
+    _model = Booster(model_file=str(MODEL_PATH))
+    return {"status": "retrained", **training_stats, "model_path": str(MODEL_PATH)}
 
 
 @app.post("/rank")

@@ -39,4 +39,8 @@ return [
         'url' => env('STORAGE_SERVICE_URL', 'http://localhost:8087'),
     ],
 
+    'ranking' => [
+        'url' => env('AI_RANKER_URL', 'http://localhost:8085'),
+    ],
+
 ];

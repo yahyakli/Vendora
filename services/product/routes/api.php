@@ -29,7 +29,7 @@ Route::middleware('service.auth')->get('/test-auth', function (Request $request)
 // Product Public Routes
 Route::get('/products', [\App\Http\Controllers\ProductController::class, 'index']);
 Route::get('/products/search', [\App\Http\Controllers\ProductController::class, 'search']);
-Route::get('/products/feed', [\App\Http\Controllers\ProductController::class, 'feed']);
+Route::middleware('service.auth')->get('/products/feed', [\App\Http\Controllers\ProductController::class, 'feed']);
 Route::get('/products/vendor/{vendorId}', [\App\Http\Controllers\ProductController::class, 'byVendor']);
 Route::get('/products/{id}', [\App\Http\Controllers\ProductController::class, 'show']);
 

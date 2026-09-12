@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\ProductImage;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Validator;
 
@@ -298,18 +300,66 @@ class ProductController extends Controller
         ]);
     }
 
-    /**
-     * Product feed endpoint (stub - integrates with AI ranking service in Sprint 9).
-     */
     public function feed(Request $request)
     {
-        $products = Product::where('status', 'active')
-            ->with(['images', 'category', 'vendor'])
-            ->orderBy('avg_rating', 'desc')
-            ->orderBy('created_at', 'desc')
-            ->paginate($request->input('per_page', 20));
+        $userId = (int) $request->attributes->get('user_id');
+        $perPage = min(max((int) $request->input('per_page', 20), 1), 100);
+        $page = max((int) $request->input('page', 1), 1);
+        $cacheKey = "products:feed:{$userId}:{$page}:{$perPage}";
 
-        return response()->json($products);
+        $rankedIds = Cache::remember($cacheKey, now()->addMinutes(5), function () use ($userId) {
+            $candidateIds = Product::where('status', 'active')
+                ->orderByDesc('created_at')
+                ->limit(500)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->values()
+                ->all();
+
+            if (!$candidateIds) {
+                return [];
+            }
+
+            try {
+                $response = Http::timeout(3)
+                    ->post(config('services.ranking.url') . '/rank', [
+                        'user_id' => $userId,
+                        'product_ids' => $candidateIds,
+                    ]);
+
+                if ($response->successful()) {
+                    return collect($response->json('products', []))
+                        ->pluck('product_id')
+                        ->map(fn ($id) => (int) $id)
+                        ->filter()
+                        ->values()
+                        ->all();
+                }
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
+
+            return $candidateIds;
+        });
+
+        $total = count($rankedIds);
+        $pageIds = array_slice($rankedIds, ($page - 1) * $perPage, $perPage);
+        $productsById = Product::whereIn('id', $pageIds)
+            ->with(['images', 'category', 'vendor'])
+            ->get()
+            ->keyBy('id');
+        $items = collect($pageIds)
+            ->map(fn ($id) => $productsById->get($id))
+            ->filter()
+            ->values();
+
+        return response()->json(new LengthAwarePaginator(
+            $items,
+            $total,
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        ));
     }
 
     /**

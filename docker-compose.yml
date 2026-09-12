@@ -114,9 +114,17 @@ services:
     ports:
       - "8082:8082"
     env_file: ./services/product/.env
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redispass}
+      REDIS_CACHE_DB: 1
+      CACHE_DRIVER: redis
+      AI_RANKER_URL: http://ai_ranking:8085
     depends_on:
       - postgres
       - redis
+      - ai_ranking
     networks:
       - vendora_net
 
@@ -162,6 +170,10 @@ services:
     ports:
       - "8085:8085"
     env_file: .env
+    environment:
+      RANKING_ADMIN_TOKEN: ${RANKING_ADMIN_TOKEN:-change-me-in-development}
+      DATA_PATH: /app/data/interactions.csv
+      MODEL_PATH: /app/models/model.lgb
     depends_on:
       - redis
     networks:

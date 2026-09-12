@@ -230,6 +230,11 @@ public class OrderService {
 
         try {
             BigDecimal refundAmount = amount != null ? amount : order.getTotalAmount();
+            if (refundAmount.compareTo(BigDecimal.ZERO) <= 0
+                    || refundAmount.compareTo(order.getTotalAmount()) > 0) {
+                throw new RuntimeException("Refund amount must be greater than zero and no more than the order total");
+            }
+
             com.stripe.model.Refund stripeRefund = stripeService.processRefund(
                     order.getStripePaymentIntentId(), refundAmount, reason);
 
@@ -257,6 +262,18 @@ public class OrderService {
         }
     }
 
+    @Transactional(readOnly = true)
+    public Dispute getDispute(Long orderId, Long userId, boolean isAdmin) {
+        Dispute dispute = disputeRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new RuntimeException("Dispute not found"));
+
+        if (!isAdmin && !dispute.getUserId().equals(userId)) {
+            throw new RuntimeException("Access denied");
+        }
+
+        return dispute;
+    }
+
     @Transactional
     public Dispute openDispute(Long orderId, String reason, Long userId) {
         Order order = orderRepository.findById(orderId)
@@ -276,6 +293,14 @@ public class OrderService {
                 .reason(reason)
                 .status(Dispute.DisputeStatus.OPEN)
                 .build());
+    }
+
+    @Transactional
+    public Dispute resolveDisputeByOrder(Long orderId, String resolution, boolean refunded) {
+        Dispute dispute = disputeRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new RuntimeException("Dispute not found"));
+
+        return resolveDispute(dispute.getId(), resolution, refunded, true);
     }
 
     @Transactional

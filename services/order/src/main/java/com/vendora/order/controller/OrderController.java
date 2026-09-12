@@ -132,15 +132,40 @@ public class OrderController {
     }
 
     /**
-     * PUT /api/orders/disputes/{disputeId}/resolve - Resolve a dispute (Admin only)
+     * GET /api/orders/{id}/dispute - Get the dispute for an order
+     */
+    @GetMapping("/{id}/dispute")
+    public ResponseEntity<Dispute> getDispute(
+            @AuthenticationPrincipal UserPrincipal user,
+            @PathVariable Long id) {
+        boolean isAdmin = user.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        return ResponseEntity.ok(orderService.getDispute(id, user.getId(), isAdmin));
+    }
+
+    /**
+     * PUT /api/orders/{id}/dispute/resolve - Resolve a dispute (Admin only)
+     */
+    @PutMapping("/{id}/dispute/resolve")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Dispute> resolveDispute(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> body) {
+        String action = body.getOrDefault("action", "REJECT").toString();
+        String notes = body.getOrDefault("notes", "").toString();
+        boolean refunded = "REFUND".equalsIgnoreCase(action);
+        return ResponseEntity.ok(orderService.resolveDisputeByOrder(id, notes, refunded));
+    }
+
+    /**
+     * PUT /api/orders/disputes/{disputeId}/resolve - Legacy dispute-ID route
      */
     @PutMapping("/disputes/{disputeId}/resolve")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Dispute> resolveDispute(
-            @AuthenticationPrincipal UserPrincipal user,
+    public ResponseEntity<Dispute> resolveDisputeById(
             @PathVariable Long disputeId,
             @RequestBody Map<String, Object> body) {
-        String resolution = (String) body.getOrDefault("resolution", "");
+        String resolution = body.getOrDefault("resolution", "").toString();
         boolean refunded = Boolean.parseBoolean(body.getOrDefault("refunded", "false").toString());
         return ResponseEntity.ok(orderService.resolveDispute(disputeId, resolution, refunded, true));
     }

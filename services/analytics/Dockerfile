@@ -11,6 +11,7 @@ COPY . .
 RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
 
 RUN chown -R www-data:www-data storage bootstrap/cache
+RUN chmod +x docker-entrypoint.sh
 
 EXPOSE 8088
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8088"]
+CMD ["./docker-entrypoint.sh"]

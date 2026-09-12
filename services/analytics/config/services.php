@@ -2,6 +2,15 @@
 
 return [
 
+    'rabbitmq' => [
+        'host' => env('RABBITMQ_HOST', '127.0.0.1'),
+        'port' => env('RABBITMQ_PORT', 5672),
+        'username' => env('RABBITMQ_USER', 'vendora'),
+        'password' => env('RABBITMQ_PASS', 'pass'),
+        'exchange' => env('RABBITMQ_EXCHANGE', 'vendora.events'),
+        'queue' => env('RABBITMQ_ANALYTICS_QUEUE', 'vendora.analytics'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services

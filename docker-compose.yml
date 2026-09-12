@@ -25,6 +25,7 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-pass}
     volumes:
       - mysql_data:/var/lib/mysql
+      - ./infra/mysql/init_databases.sql:/docker-entrypoint-initdb.d/01-init-databases.sql:ro
     networks:
       - vendora_net
 
@@ -227,6 +228,20 @@ services:
     ports:
       - "8088:8088"
     env_file: .env
+    environment:
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: ${ANALYTICS_DB:-vendora_analytics}
+      DB_USERNAME: ${MYSQL_USER:-vendora}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-pass}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-vendora}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-pass}
+      RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-vendora.events}
+      RABBITMQ_ANALYTICS_QUEUE: ${RABBITMQ_ANALYTICS_QUEUE:-vendora.analytics}
+      ANALYTICS_MIGRATE_RETRIES: ${ANALYTICS_MIGRATE_RETRIES:-30}
     depends_on:
       - mysql
       - rabbitmq

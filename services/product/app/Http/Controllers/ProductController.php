@@ -307,7 +307,7 @@ class ProductController extends Controller
         $page = max((int) $request->input('page', 1), 1);
         $cacheKey = "products:feed:{$userId}:{$page}:{$perPage}";
 
-        $rankedIds = Cache::remember($cacheKey, now()->addMinutes(5), function () use ($userId) {
+        $rankedIds = Cache::store('redis')->remember($cacheKey, now()->addMinutes(5), function () use ($userId) {
             $candidateIds = Product::where('status', 'active')
                 ->orderByDesc('created_at')
                 ->limit(500)

@@ -113,8 +113,17 @@ services:
     container_name: vendora-product
     ports:
       - "8082:8082"
-    env_file: ./services/product/.env
+    env_file: .env
     environment:
+      APP_ENV: ${APP_ENV:-production}
+      APP_KEY: ${APP_KEY:-base64:change-me-in-development}
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${PRODUCT_DB:-vendora_product}
+      DB_USERNAME: ${POSTGRES_USER:-vendora}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-pass}
+      AUTH_SERVICE_URL: http://auth:8081
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-redispass}
@@ -174,6 +183,7 @@ services:
       RANKING_ADMIN_TOKEN: ${RANKING_ADMIN_TOKEN:-change-me-in-development}
       DATA_PATH: /app/data/interactions.csv
       MODEL_PATH: /app/models/model.lgb
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redispass}@redis:6379/0
     depends_on:
       - redis
     networks:

@@ -1,6 +1,7 @@
 package com.vendora.order.controller;
 
 import com.stripe.exception.SignatureVerificationException;
+import com.stripe.exception.EventDataObjectDeserializationException;
 import com.stripe.model.Event;
 import com.stripe.model.PaymentIntent;
 import com.stripe.model.StripeObject;
@@ -58,12 +59,19 @@ public class StripeWebhookController {
 
         // Handle payment_intent events
         if (event.getType().startsWith("payment_intent.")) {
-            Optional<StripeObject> stripeObject = event.getDataObjectDeserializer().getObject();
-            stripeObject.ifPresent(obj -> {
-                if (obj instanceof PaymentIntent pi) {
-                    orderService.handleStripeWebhook(pi.getId(), event.getType());
-                }
-            });
+            StripeObject stripeObject;
+            try {
+                Optional<StripeObject> deserializedObject = event.getDataObjectDeserializer().getObject();
+                stripeObject = deserializedObject.isPresent()
+                        ? deserializedObject.get()
+                        : event.getDataObjectDeserializer().deserializeUnsafe();
+            } catch (EventDataObjectDeserializationException e) {
+                log.error("Failed to deserialize Stripe event {}: {}", event.getId(), e.getMessage());
+                return ResponseEntity.badRequest().body(Map.of("error", "Invalid Stripe event data"));
+            }
+            if (stripeObject instanceof PaymentIntent pi) {
+                orderService.handleStripeWebhook(pi.getId(), event.getType());
+            }
         }
 
         return ResponseEntity.ok(Map.of("received", "true"));

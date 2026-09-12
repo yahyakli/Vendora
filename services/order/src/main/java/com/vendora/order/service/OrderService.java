@@ -18,6 +18,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -60,7 +61,7 @@ public class OrderService {
         return order;
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Order checkout(Long userId, CreateOrderRequest request) {
         Cart cart = cartRepository.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("Cart is empty or not found"));
@@ -107,7 +108,6 @@ public class OrderService {
 
         Order savedOrder = orderRepository.save(order);
 
-        // Create Stripe PaymentIntent
         try {
             PaymentIntent intent = stripeService.createPaymentIntent(totalAmount, "usd", savedOrder.getId(), userId);
             savedOrder.setStripePaymentIntentId(intent.getId());
@@ -125,10 +125,10 @@ public class OrderService {
                     .build());
 
         } catch (StripeException e) {
-            log.error("Stripe error creating PaymentIntent for order {}: {}", savedOrder.getId(), e.getMessage());
+            throw new IllegalStateException(
+                    "Stripe error creating PaymentIntent for order " + savedOrder.getId(), e);
         }
 
-        // Clear the cart
         cart.getItems().clear();
         cartRepository.save(cart);
 
@@ -186,6 +186,7 @@ public class OrderService {
                 case "payment_intent.succeeded" -> {
                     order.setStatus(Order.OrderStatus.PAID);
                     order.setPaymentStatus(Order.PaymentStatus.SUCCEEDED);
+                    generateDigitalLicenseKeys(order);
                     orderRepository.save(order);
 
                     // Update payment record
@@ -219,6 +220,13 @@ public class OrderService {
                 default -> log.debug("Unhandled Stripe event type: {}", eventType);
             }
         });
+    }
+
+    private void generateDigitalLicenseKeys(Order order) {
+        order.getItems().stream()
+                .filter(item -> "digital".equalsIgnoreCase(item.getProductType()))
+                .filter(item -> item.getDigitalLicenseKey() == null || item.getDigitalLicenseKey().isBlank())
+                .forEach(item -> item.setDigitalLicenseKey("VENDORA-" + UUID.randomUUID().toString().toUpperCase()));
     }
 
     @Transactional

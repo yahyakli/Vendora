@@ -15,10 +15,10 @@
     "amqplib": "^0.10.5",
     "express": "^5.2.1",
     "firebase-admin": "^13.4.0",
-    "nodemailer": "^7.0.3"
+    "nodemailer": "^7.0.3",
+    "dotenv": "^17.4.2"
   },
   "devDependencies": {
-    "dotenv": "^17.4.2",
     "nodemon": "^3.1.14"
   }
 }

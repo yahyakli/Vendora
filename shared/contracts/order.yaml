@@ -191,6 +191,21 @@ paths:
         '200':
           description: List of user orders
 
+  /orders/admin/all:
+    get:
+      summary: Get all platform orders (Admin)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 0 }
+        - name: size
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        '200':
+          description: Paginated platform orders
+
   /orders/{id}:
     get:
       summary: Get order details by ID

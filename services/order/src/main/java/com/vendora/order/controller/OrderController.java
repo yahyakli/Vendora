@@ -78,6 +78,18 @@ public class OrderController {
     }
 
     /**
+     * GET /api/orders/admin/all - Get all platform orders
+     */
+    @GetMapping("/admin/all")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Page<Order>> getAllOrders(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return ResponseEntity.ok(orderService.getAllOrders(pageable));
+    }
+
+    /**
      * POST /api/orders/{id}/cancel - Cancel an order before shipping
      */
     @PostMapping("/{id}/cancel")

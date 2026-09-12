@@ -32,6 +32,7 @@ public class OrderService {
     private final RefundRepository refundRepository;
     private final DisputeRepository disputeRepository;
     private final PayoutRepository payoutRepository;
+    private final OrderItemRepository orderItemRepository;
 
     @Transactional(readOnly = true)
     public Page<Order> getUserOrders(Long userId, Pageable pageable) {
@@ -41,6 +42,11 @@ public class OrderService {
     @Transactional(readOnly = true)
     public Page<Order> getVendorOrders(Long vendorId, Pageable pageable) {
         return orderRepository.findByVendorId(vendorId, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Order> getAllOrders(Pageable pageable) {
+        return orderRepository.findAll(pageable);
     }
 
     @Transactional(readOnly = true)
@@ -322,5 +328,38 @@ public class OrderService {
     @Transactional(readOnly = true)
     public List<Payout> getVendorPayouts(Long vendorId) {
         return payoutRepository.findByVendorIdOrderByCreatedAtDesc(vendorId);
+    }
+
+    @Transactional
+    public Payout processVendorPayout(Long vendorId) {
+        List<OrderItem> eligibleItems = orderItemRepository.findPayoutEligibleItems(
+                vendorId,
+                List.of(Order.OrderStatus.DELIVERED));
+
+        BigDecimal eligibleTotal = eligibleItems.stream()
+                .map(OrderItem::getTotalPrice)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal alreadyPaid = payoutRepository.findByVendorIdOrderByCreatedAtDesc(vendorId).stream()
+                .filter(payout -> payout.getStatus() == Payout.PayoutStatus.PAID)
+                .map(Payout::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal payableAmount = eligibleTotal.subtract(alreadyPaid);
+        if (payableAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new RuntimeException("No payable balance found for vendor");
+        }
+
+        Payout payout = Payout.builder()
+                .vendorId(vendorId)
+                .amount(payableAmount)
+                .status(Payout.PayoutStatus.PROCESSING)
+                .periodEnd(LocalDateTime.now())
+                .build();
+        payout = payoutRepository.save(payout);
+
+        payout.setStatus(Payout.PayoutStatus.PAID);
+        payout.setProcessedAt(LocalDateTime.now());
+        return payoutRepository.save(payout);
     }
 }

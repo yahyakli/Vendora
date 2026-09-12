@@ -2,10 +2,10 @@ openapi: 3.0.0
 info:
   title: Vendora Chat & Realtime Messaging Service API
   version: 1.0.0
-  description: Real-time buyer-seller messaging, conversation threads, and offline notification routing service
+  description: REST conversation history and Socket.IO realtime messaging
 
 servers:
-  - url: /api/chat
+  - url: /api
     description: Nginx Gateway API Route
 
 components:
@@ -18,33 +18,51 @@ components:
   schemas:
     Message:
       type: object
+      required: [senderId, recipientId, content]
       properties:
-        id: { type: string }
-        conversation_id: { type: string }
-        sender_id: { type: integer }
-        recipient_id: { type: integer }
-        content: { type: string }
-        read: { type: boolean }
-        read_at: { type: string, format: date-time, nullable: true }
-        created_at: { type: string, format: date-time }
+        _id: { type: string }
+        senderId: { type: integer }
+        recipientId: { type: integer }
+        content: { type: string, maxLength: 5000 }
+        sentAt: { type: string, format: date-time }
+        readAt: { type: string, format: date-time, nullable: true }
 
     Conversation:
       type: object
+      required: [participantIds, messages]
       properties:
-        id: { type: string }
-        participants:
+        _id: { type: string }
+        participantIds:
           type: array
+          minItems: 2
           items: { type: integer }
-        last_message: { type: string, nullable: true }
-        last_message_at: { type: string, format: date-time, nullable: true }
-        unread_count: { type: integer }
-        created_at: { type: string, format: date-time }
-        updated_at: { type: string, format: date-time }
+        messages:
+          type: array
+          items: { $ref: '#/components/schemas/Message' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ConversationCreateRequest:
+      type: object
+      required: [participantIds]
+      properties:
+        participantIds:
+          type: array
+          minItems: 2
+          items: { type: integer }
+
+    SocketMessageSend:
+      type: object
+      required: [conversationId, recipientId, content]
+      properties:
+        conversationId: { type: string }
+        recipientId: { type: integer }
+        content: { type: string, maxLength: 5000 }
 
 paths:
-  /conversations/{userId}:
+  /chat/conversations/{userId}:
     get:
-      summary: Get all conversations for a user
+      summary: Get conversations for the authenticated user
       security: [{ bearerAuth: [] }]
       parameters:
         - name: userId
@@ -53,67 +71,78 @@ paths:
           schema: { type: integer }
       responses:
         '200':
-          description: List of conversations
+          description: Conversation list
           content:
             application/json:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/Conversation' }
+        '401': { description: Authentication required }
+        '403': { description: User does not own this resource }
 
-  /conversations:
+  /chat/conversations:
     post:
-      summary: Start a new conversation between buyer and vendor
+      summary: Create or retrieve a conversation
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              properties:
-                recipient_id: { type: integer }
-                initial_message: { type: string }
+            schema: { $ref: '#/components/schemas/ConversationCreateRequest' }
       responses:
         '201':
-          description: Conversation created
+          description: Conversation created or returned
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Conversation' }
+        '400': { description: At least two participants including the requester are required }
+        '401': { description: Authentication required }
 
-  /messages/{conversationId}:
+  /chat/messages/{conversationId}:
     get:
-      summary: Get message history for a conversation
+      summary: Get messages in a conversation
       security: [{ bearerAuth: [] }]
       parameters:
         - name: conversationId
           in: path
           required: true
           schema: { type: string }
-        - name: limit
-          in: query
-          schema: { type: integer, default: 50 }
-        - name: before
-          in: query
-          schema: { type: string, format: date-time }
       responses:
         '200':
-          description: Message thread history
+          description: Embedded message history
           content:
             application/json:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/Message' }
+        '401': { description: Authentication required }
+        '404': { description: Conversation not found or access denied }
 
-  /search:
-    get:
-      summary: Search message content across conversations
-      security: [{ bearerAuth: [] }]
-      parameters:
-        - name: q
-          in: query
-          required: true
-          schema: { type: string }
-      responses:
-        '200':
-          description: Search results
+x-socket-io:
+  path: /socket.io/
+  authentication:
+    handshake:
+      auth:
+        token: JWT bearer token
+  events:
+    message:send:
+      payload: { $ref: '#/components/schemas/SocketMessageSend' }
+      emits: message:received
+    message:received:
+      payload: { conversationId: string, message: { $ref: '#/components/schemas/Message' } }
+    typing:start:
+      payload: { conversationId: string }
+    typing:stop:
+      payload: { conversationId: string }
+    read:receipt:
+      payload: { conversationId: string, messageId: string }
+    chat:error:
+      payload: { message: string }
 
+x-rabbitmq:
+  exchange: vendora.events
+  type: topic
+  events:
+    chat.offline_message:
+      description: Published when the message recipient has no connected socket.
+      payload: { conversationId: string, recipientId: integer, message: { $ref: '#/components/schemas/Message' } }

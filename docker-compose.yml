@@ -138,6 +138,18 @@ services:
     ports:
       - "8084:8084"
     env_file: .env
+    environment:
+      PORT: 8084
+      MONGO_HOST: mongodb
+      MONGO_PORT: 27017
+      MONGO_USER: ${MONGO_USER:-vendora}
+      MONGO_PASS: ${MONGO_PASS:-pass}
+      MONGO_DATABASE: ${CHAT_DB:-vendora_chat}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-vendora}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-pass}
+      AUTH_SERVICE_URL: http://auth:8081
     depends_on:
       - mongodb
       - rabbitmq

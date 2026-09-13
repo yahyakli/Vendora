@@ -8,3 +8,7 @@ app.include_router(storage.router)
 @app.get("/")
 def root():
     return {"message": "Vendora Storage Service running 🚀"}
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "service": "storage"}

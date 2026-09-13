@@ -25,6 +25,10 @@ app.get('/', (req, res) => {
     });
 });
 
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok', service: 'chat' });
+});
+
 const PORT = process.env.PORT || 8084;
 const authServiceUrl = process.env.AUTH_SERVICE_URL || 'http://localhost:8081';
 const rabbitMqUrl = process.env.RABBITMQ_URL || [

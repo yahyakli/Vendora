@@ -58,6 +58,12 @@ app.get('/', (request, response) => response.json({
     firebase: firebaseReady,
 }));
 
+app.get('/health', (request, response) => response.json({
+    status: 'ok',
+    service: 'notification',
+    rabbitmq: Boolean(rabbitChannel),
+}));
+
 const firstValue = (payload, keys) => keys.map((key) => payload[key]).find(Boolean);
 
 const eventDetails = (routingKey, payload) => {

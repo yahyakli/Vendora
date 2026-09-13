@@ -80,7 +80,7 @@ services:
 
   # --- API Gateway ---
   nginx:
-    image: nginx:alpine
+    build: ./infra/nginx
     container_name: vendora-nginx
     ports:
       - "80:80"

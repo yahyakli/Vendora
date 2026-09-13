@@ -21,7 +21,7 @@ public class SecurityConfig {
         http.csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth ->
-                        auth.requestMatchers("/api/orders/webhook/**", "/orders/webhook/**").permitAll()
+                        auth.requestMatchers("/health", "/api/orders/webhook/**", "/orders/webhook/**").permitAll()
                             .requestMatchers("/error").permitAll()
                             .anyRequest().authenticated()
                 );

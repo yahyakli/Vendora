@@ -22,6 +22,8 @@ RUN ./mvnw package -DskipTests
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
+RUN apk add --no-cache wget
+
 # Copy the jar from the build stage
 COPY --from=build /app/target/*.jar app.jar
 

@@ -10,8 +10,14 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pass}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init_databases.sql:/docker-entrypoint-initdb.d/01-init-databases.sql:ro
     networks:
       - vendora_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vendora} -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   mysql:
     image: mysql:8.0
@@ -28,6 +34,11 @@ services:
       - ./infra/mysql/init_databases.sql:/docker-entrypoint-initdb.d/01-init-databases.sql:ro
     networks:
       - vendora_net
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p${MYSQL_ROOT_PASSWORD:-rootpass} --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   mongodb:
     image: mongo:7
@@ -41,6 +52,11 @@ services:
       - mongo_data:/data/db
     networks:
       - vendora_net
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval \"db.adminCommand('ping').ok\" | grep 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   redis:
     image: redis:7-alpine
@@ -50,6 +66,11 @@ services:
     command: redis-server --requirepass ${REDIS_PASSWORD:-redispass}
     networks:
       - vendora_net
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD:-redispass} ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   rabbitmq:
     image: rabbitmq:3-management
@@ -62,6 +83,11 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-pass}
     networks:
       - vendora_net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   minio:
     image: quay.io/minio/minio:latest
@@ -87,12 +113,18 @@ services:
     volumes:
       - ./infra/nginx/nginx.dev.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - auth
-      - product
-      - order
-      - chat
-      - storage
-      - analytics
+      auth:
+        condition: service_healthy
+      product:
+        condition: service_healthy
+      order:
+        condition: service_healthy
+      chat:
+        condition: service_healthy
+      storage:
+        condition: service_healthy
+      analytics:
+        condition: service_healthy
     networks:
       - vendora_net
 
@@ -104,10 +136,17 @@ services:
       - "8081:8081"
     env_file: .env
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - vendora_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/health | grep -q 'status' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   product:
     build: ./services/product
@@ -132,11 +171,21 @@ services:
       CACHE_DRIVER: redis
       AI_RANKER_URL: http://ai_ranking:8085
     depends_on:
-      - postgres
-      - redis
-      - ai_ranking
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ai_ranking:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
     networks:
       - vendora_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8082/health | grep -q 'status' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   order:
     build: ./services/order
@@ -145,10 +194,17 @@ services:
       - "8083:8083"
     env_file: .env
     depends_on:
-      - mysql
-      - rabbitmq
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - vendora_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8083/health | grep -q 'status' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   chat:
     build: ./services/chat
@@ -169,10 +225,17 @@ services:
       RABBITMQ_PASS: ${RABBITMQ_PASS:-pass}
       AUTH_SERVICE_URL: http://auth:8081
     depends_on:
-      - mongodb
-      - rabbitmq
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - vendora_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8084/health | grep -q 'status' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   ai_ranking:
     build: ./services/ranking
@@ -186,9 +249,15 @@ services:
       MODEL_PATH: /app/models/model.lgb
       REDIS_URL: redis://:${REDIS_PASSWORD:-redispass}@redis:6379/0
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     networks:
       - vendora_net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8085/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   notification:
     build: ./services/notification
@@ -207,7 +276,8 @@ services:
       NOTIFICATION_MAX_RETRIES: ${NOTIFICATION_MAX_RETRIES:-3}
       NOTIFICATION_RETRY_BASE_DELAY_MS: ${NOTIFICATION_RETRY_BASE_DELAY_MS:-1000}
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
     networks:
       - vendora_net
 
@@ -218,9 +288,15 @@ services:
       - "8087:8087"
     env_file: .env
     depends_on:
-      - minio
+      minio:
+        condition: service_started
     networks:
       - vendora_net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8087/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   analytics:
     build: ./services/analytics
@@ -243,10 +319,17 @@ services:
       RABBITMQ_ANALYTICS_QUEUE: ${RABBITMQ_ANALYTICS_QUEUE:-vendora.analytics}
       ANALYTICS_MIGRATE_RETRIES: ${ANALYTICS_MIGRATE_RETRIES:-30}
     depends_on:
-      - mysql
-      - rabbitmq
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - vendora_net
+    healthcheck:
+      test: ["CMD", "php", "-r", "if (@file_get_contents('http://localhost:8088/health') === false) exit(1);"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   # --- Apps ---
   web:

@@ -9,6 +9,7 @@ RUN apk add --no-cache \
     zip \
     unzip \
     git \
+    wget \
     postgresql-dev
 
 # Configure PHP extensions

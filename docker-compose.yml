@@ -163,6 +163,7 @@ services:
       DB_DATABASE: ${PRODUCT_DB:-vendora_product}
       DB_USERNAME: ${POSTGRES_USER:-vendora}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-pass}
+      DATABASE_URL: ""
       AUTH_SERVICE_URL: http://auth:8081
       REDIS_HOST: redis
       REDIS_PORT: 6379

@@ -23,6 +23,7 @@ WORKDIR /var/www
 
 # Copy application files
 COPY . .
+RUN rm -f .env
 
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader

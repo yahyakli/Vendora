@@ -64,7 +64,7 @@ services:
       - vendora_net
 
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:latest
     container_name: vendora-minio
     ports:
       - "9000:9000"
